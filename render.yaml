@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: WhatsappCloud
+    env: node
+    region: oregon
+    buildCommand:
+      - apt-get update
+      - apt-get install -y chromium-browser
+      - npm install
+    startCommand: npm start
