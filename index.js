@@ -32,7 +32,6 @@ async function createClient(sessionName) {
     async function startClient() {
         try {
             const client = await wppconnect.create({
-                executablePath: 'usr/bin/chromium-browser',
                 session: sessionName,
                 puppeteerOptions: {
                     executablePath: puppeteer.executablePath(),
