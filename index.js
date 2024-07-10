@@ -2,6 +2,7 @@ const wppconnect = require('@wppconnect-team/wppconnect');
 const fs = require('fs');
 const path = require('path');
 const { connectToDatabase, Message } = require('./db');
+const { default: puppeteer } = require('puppeteer');
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 // const axios = require('axios');/
@@ -34,6 +35,7 @@ async function createClient(sessionName) {
                 executablePath: 'usr/bin/chromium-browser',
                 session: sessionName,
                 puppeteerOptions: {
+                    executablePath: puppeteer.executablePath(),
                     headless: true,
                     args: [
                         '--no-sandbox',
