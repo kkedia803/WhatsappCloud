@@ -1,0 +1,25 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@wppconnect-team/wppconnect": "^1.32.3",
+    "axios": "^1.7.2",
+    "browsers": "^1.0.2",
+    "chrome": "^0.1.0",
+    "cloudinary": "^2.2.0",
+    "dotenv": "^16.4.5",
+    "install": "^0.13.0",
+    "mongodb": "^6.8.0",
+    "mongoose": "^8.4.4",
+    "puppeteer": "^22.12.1",
+    "sharp": "^0.33.4"
+  }
+}
