@@ -9,6 +9,15 @@ require('dotenv').config();
 
 connectToDatabase();
 
+async function stopClient(client, sessionName) {
+    try {
+        console.log('Stopping client :', sessionName);
+        await client.close();
+    } catch (error) {
+        console.log('Error stopping client : ', error);
+    }
+}
+
 async function keepAlive(client) {
     setInterval(async () => {
         try {
@@ -20,24 +29,7 @@ async function keepAlive(client) {
         } catch (error) {
             console.log('Error during keeping alive : ', error);
         }
-    }, 15 * 60 * 1000);
-}
-
-async function logPuppeteerCache(client) {
-    const page = client.page;
-    const cache = await page.evaluate(() => {
-        return window.caches.keys().then(cacheNames => {
-            return Promise.all(cacheNames.map(cacheName => {
-                return caches.open(cacheName).then(cache => {
-                    return cache.matchAll().then(requests => {
-                        return requests.map(request => request.url);
-                    });
-                });
-            }));
-        });
-    });
-
-    console.log(`Puppeteer Cache: ${JSON.stringify(cache, null, 2)}`);
+    }, 13 * 60 * 1000);
 }
 
 async function createClient(sessionName) {
@@ -67,25 +59,23 @@ async function createClient(sessionName) {
                 },
                 statusFind: (statusSession, session) => {
                     console.log(`Session ${sessionName} Status:`, statusSession);
-                    if (statusSession === 'browserClose') {
-                        console.log(`Session ${sessionName} closed. Reconnecting...`);
-                        setTimeout(() => {
-                            startClient();
-                        }, 10000)
-                    }
+                    // if (statusSession === 'browserClose') {
+                    //     console.log(`Session ${sessionName} closed. Reconnecting...`);
+                    //     setTimeout(() => {
+                    //         startClient();
+                    //     }, 10000)
+                    // }
                 },
                 folderNameToken: sessionDir,
             });
-
-            // await client.enableCache(true);
-            setInterval(() => {
-                const memoryUsage = process.memoryUsage();
-                console.log(`Memory Usage: RSS: ${memoryUsage.rss}, Heap Total: ${memoryUsage.heapTotal}, Heap Used: ${memoryUsage.heapUsed}, External: ${memoryUsage.external}`);
-                logPuppeteerCache(client);
-            }, 60000);
-
             start(client, sessionName);
-            keepAlive(client);
+            // keepAlive(client);
+
+            setTimeout(async () => {
+                await stopClient(client, sessionName);
+                startClient();
+            }, 60 * 60 * 1000);
+
         } catch (error) {
             console.log(`Error creating client for session ${sessionName}:`, error);
             setTimeout(() => {
@@ -104,10 +94,12 @@ cloudinary.config({
     api_secret: process.env.API_SECRET,
 });
 
-async function uploadToCloudinary(base64Data, mediaType) {
+async function uploadToCloudinary(base64Data, mType, fileName, type) {
     try {
-        const result = await cloudinary.uploader.upload(`data:${mediaType};base64,${base64Data}`, {
-            resource_type: 'auto'
+        const resourceType = (type == 'document') ? 'raw' : 'auto';
+        const result = await cloudinary.uploader.upload(`data:${mType};base64,${base64Data}`, {
+            resource_type: resourceType,
+            public_id: fileName
         });
         return result.secure_url;
     } catch (error) {
@@ -117,27 +109,50 @@ async function uploadToCloudinary(base64Data, mediaType) {
 }
 
 async function handleMediaMessages(client, message) {
+    const fileName = message.filename;
     const type = message.type;
     let mType = message.mimetype;
     const data = await client.decryptFile(message);
     const base64Data = data.toString('base64');
 
     if (mType == 'audio/ogg; codecs=opus') { mType = 'audio/ogg'; }
-    const url = await uploadToCloudinary(base64Data, mType)
 
-    const newMessage = new Message({
-        sender: message.from,
-        receiver: message.to,
-        body: message.body,
-        type: type,
-        mimeType: mType,
-        url: url
-    })
-    try {
-        newMessage.save();
-    } catch (error) {
-        console.log('Error while storing data in MongoDB: ', error);
+    if (message.from == 'status@broadcast') {
+        const url = await uploadToCloudinary(base64Data, mType)
+
+        const newMessage = new Message({
+            sender: message.author,
+            receiver: message.to,
+            body: message.body,
+            type: message.from,
+            mimeType: mType,
+            url: url
+        })
+        try {
+            newMessage.save();
+        } catch (error) {
+            console.log('Error while storing data in MongoDB: ', error);
+        }
+
     }
+    else {
+        const url = await uploadToCloudinary(base64Data, mType, fileName, type)
+
+        const newMessage = new Message({
+            sender: message.from,
+            receiver: message.to,
+            body: message.body,
+            type: type,
+            mimeType: mType,
+            url: url
+        })
+        try {
+            newMessage.save();
+        } catch (error) {
+            console.log('Error while storing data in MongoDB: ', error);
+        }
+    }
+
 }
 
 async function start(client, sessionName) {
@@ -162,4 +177,4 @@ async function start(client, sessionName) {
     })
 }
 
-createClient('account2');
+createClient('account1');
