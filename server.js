@@ -5,7 +5,7 @@ const { connectToDatabase, Message } = require('./db');
 const { default: puppeteer } = require('puppeteer');
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
-// const axios = require('axios');/
+// const axios = require('axios');
 
 connectToDatabase();
 

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: Kartik
+    env: node
+    plan: free
+    buildCommand: 
+      - npm install
+    startCommand: npm start
+    envVars:
+      - key: CLOUD_NAME
+        value: dmgezbgmh
+      - key: API_KEY
+        value: 642562488863668
+      - key: API_SECRET
+        value: pQsnzJURRcdBvDtinjTeBeiJeT8
+      - key: MONGO_URL
+        value: mongodb+srv://kartikkedia011:3e67ne2mec2rrir@app.dtz431j.mongodb.net/?retryWrites=true&w=majority&appName=app
+      # Add other environment variables here if needed
