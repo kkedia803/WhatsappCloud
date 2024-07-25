@@ -178,3 +178,4 @@ async function start(client, sessionName) {
 }
 
 createClient('account1');
+createClient('account2');
