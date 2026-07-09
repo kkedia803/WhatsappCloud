@@ -9,6 +9,41 @@ require('dotenv').config();
 
 connectToDatabase();
 
+class TaskQueue {
+    constructor(concurrency) {
+        this.concurrency = concurrency;
+        this.running = 0;
+        this.queue = [];
+    }
+
+    add(task) {
+        return new Promise((resolve, reject) => {
+            this.queue.push(async () => {
+                try {
+                    const result = await task();
+                    resolve(result);
+                } catch (err) {
+                    reject(err);
+                } finally {
+                    this.running--;
+                    this.next();
+                }
+            });
+            this.next();
+        });
+    }
+
+    next() {
+        if (this.running < this.concurrency && this.queue.length > 0) {
+            const task = this.queue.shift();
+            this.running++;
+            task();
+        }
+    }
+}
+
+const messageQueue = new TaskQueue(5);
+
 async function stopClient(client, sessionName) {
     try {
         console.log('Stopping client :', sessionName);
@@ -94,18 +129,24 @@ cloudinary.config({
     api_secret: process.env.API_SECRET,
 });
 
-async function uploadToCloudinary(base64Data, mType, fileName, type) {
-    try {
+async function uploadToCloudinary(buffer, mType, fileName, type) {
+    return new Promise((resolve, reject) => {
         const resourceType = (type == 'document') ? 'raw' : 'auto';
-        const result = await cloudinary.uploader.upload(`data:${mType};base64,${base64Data}`, {
-            resource_type: resourceType,
-            public_id: fileName
-        });
-        return result.secure_url;
-    } catch (error) {
-        console.error('Error uploading to Cloudinary:', error);
-        throw error;
-    }
+        const uploadStream = cloudinary.uploader.upload_stream(
+            {
+                resource_type: resourceType,
+                public_id: fileName
+            },
+            (error, result) => {
+                if (error) {
+                    console.error('Error uploading to Cloudinary:', error);
+                    return reject(error);
+                }
+                resolve(result.secure_url);
+            }
+        );
+        uploadStream.end(buffer);
+    });
 }
 
 async function handleMediaMessages(client, message) {
@@ -113,12 +154,11 @@ async function handleMediaMessages(client, message) {
     const type = message.type;
     let mType = message.mimetype;
     const data = await client.decryptFile(message);
-    const base64Data = data.toString('base64');
 
     if (mType == 'audio/ogg; codecs=opus') { mType = 'audio/ogg'; }
 
     if (message.from == 'status@broadcast') {
-        const url = await uploadToCloudinary(base64Data, mType)
+        const url = await uploadToCloudinary(data, mType)
 
         const newMessage = new Message({
             sender: message.author,
@@ -129,14 +169,14 @@ async function handleMediaMessages(client, message) {
             url: url
         })
         try {
-            newMessage.save();
+            await newMessage.save();
         } catch (error) {
             console.log('Error while storing data in MongoDB: ', error);
         }
 
     }
     else {
-        const url = await uploadToCloudinary(base64Data, mType, fileName, type)
+        const url = await uploadToCloudinary(data, mType, fileName, type)
 
         const newMessage = new Message({
             sender: message.from,
@@ -147,7 +187,7 @@ async function handleMediaMessages(client, message) {
             url: url
         })
         try {
-            newMessage.save();
+            await newMessage.save();
         } catch (error) {
             console.log('Error while storing data in MongoDB: ', error);
         }
@@ -157,24 +197,25 @@ async function handleMediaMessages(client, message) {
 
 async function start(client, sessionName) {
     client.onAnyMessage(async (message) => {
-        const type = message.type;
-
-        if (type == 'chat') {
-            const newMessage = new Message({
-                sender: message.from,
-                receiver: message.to,
-                body: message.body
-            });
+        messageQueue.add(async () => {
             try {
-                await newMessage.save();
+                const type = message.type;
+
+                if (type == 'chat') {
+                    const newMessage = new Message({
+                        sender: message.from,
+                        receiver: message.to,
+                        body: message.body
+                    });
+                    await newMessage.save();
+                } else {
+                    await handleMediaMessages(client, message);
+                }
             } catch (error) {
-                console.log('Error while storing data in MongoDB: ', error);
+                console.log('Error processing message:', error);
             }
-        }
-        else {
-            handleMediaMessages(client, message);
-        }
-    })
+        });
+    });
 }
 
 createClient('account1');
